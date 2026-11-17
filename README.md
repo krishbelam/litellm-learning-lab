@@ -2,6 +2,8 @@
 
 A small, hands-on project for understanding **LiteLLM Proxy as an API gateway**.
 
+👉 **[Explore the Live Interactive Guide](https://krishbelam.github.io/litellm-learning-lab/)**
+
 The examples use a fictional **Bookstore Support** service rather than a finance, fraud, or rate-limit example copied from another tutorial. The three Python demos build on one another:
 
 1. **Basic chat** — call a model through LiteLLM using the OpenAI-compatible API.
@@ -288,7 +290,7 @@ Confirm the database credentials in `.env` match the Compose settings and that t
 | Virtual-key RPM limits and concurrency | `demos/03_rate_limits.py` |
 | Proxy + database containers | `docker-compose.yml` |
 | Local vs cloud provider configuration | `config.yaml`, `.env.example` |
-| Troubleshooting container-to-host networking | this README and `docs/interactive-guide.html` |
+| Troubleshooting container-to-host networking | https://krishbelam.github.io/litellm-learning-lab/ |
 
 ## License
 
