@@ -1,0 +1,16 @@
+litellm-learning-lab/
+├── .env.example
+├── .gitignore
+├── LICENSE
+├── README.md
+├── config.yaml
+├── docker-compose.yml
+├── requirements.txt
+├── demos/
+│   ├── 01_basic_chat.py
+│   ├── 02_model_routing.py
+│   └── 03_rate_limits.py
+└── docs/
+    ├── PROJECT-METADATA.md
+    ├── TROUBLESHOOTING.md
+    └── interactive-guide.html

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiteLLM Learning Lab — Interactive Guide</title>
+<style>
+:root { color-scheme: light dark; --accent:#3978d5; --panel:color-mix(in srgb, Canvas 94%, var(--accent) 6%); }
+* { box-sizing:border-box; }
+body { margin:0; font:16px/1.55 system-ui,sans-serif; background:Canvas; color:CanvasText; }
+header { padding:2.2rem max(1rem,calc((100% - 1050px)/2)); background:var(--panel); border-bottom:1px solid color-mix(in srgb, CanvasText 18%, transparent); }
+main { max-width:1050px; margin:auto; padding:1.2rem; }
+h1 { margin:.1rem 0; font-size:clamp(1.8rem,4vw,2.7rem); }
+h2 { margin-top:2rem; }
+small,.muted { opacity:.75; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
+.card,section { background:var(--panel); border:1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius:14px; padding:1rem; }
+.card strong { display:block; color:var(--accent); margin-bottom:.3rem; }
+.flow { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.node { padding:.7rem .85rem; border:1px solid var(--accent); border-radius:10px; background:var(--panel); }
+.arrow { color:var(--accent); font-weight:700; }
+button,select { font:inherit; padding:.55rem .8rem; border-radius:8px; border:1px solid color-mix(in srgb, CanvasText 30%, transparent); background:Canvas; color:CanvasText; cursor:pointer; }
+button[aria-pressed="true"] { background:var(--accent); color:white; }
+pre { overflow:auto; padding:1rem; border-radius:10px; background:color-mix(in srgb, CanvasText 8%, Canvas); }
+code { font-family:ui-monospace,monospace; }
+.tabrow { display:flex; gap:.5rem; flex-wrap:wrap; margin:.7rem 0; }
+.panel { display:none; }
+.panel.active { display:block; }
+.callout { border-left:4px solid var(--accent); padding:.6rem 1rem; background:var(--panel); }
+label { display:block; margin:.5rem 0 .2rem; }
+input { max-width:100%; padding:.5rem; font:inherit; }
+#scenarioOutput { min-height:4rem; white-space:pre-wrap; }
+footer { max-width:1050px; margin:auto; padding:1rem; opacity:.7; }
+</style>
+</head>
+<body>
+<header>
+  <small>HANDS-ON LEARNING RESOURCE</small>
+  <h1>LiteLLM Learning Lab</h1>
+  <p>Understand the gateway, model routing, virtual keys, and rate limits using a fictional online bookstore.</p>
+</header>
+<main>
+  <section>
+    <h2>1. Follow a request</h2>
+    <p>Your Python app uses the OpenAI SDK, but its base URL points to LiteLLM—not directly to a model provider.</p>
+    <div class="flow" aria-label="Request flow">
+      <div class="node">Python app<br><small>OpenAI SDK</small></div><span class="arrow">→</span>
+      <div class="node">LiteLLM Proxy<br><small>auth · policy · routing</small></div><span class="arrow">→</span>
+      <div class="node">Ollama or OpenAI<br><small>upstream model</small></div>
+    </div>
+    <p class="muted">PostgreSQL sits alongside the proxy and stores persistent proxy metadata. It does not generate model responses.</p>
+  </section>
+
+  <h2>2. Explore the three demos</h2>
+  <div class="tabrow" role="tablist" aria-label="Demo explanations">
+    <button class="tab" data-tab="basic" aria-pressed="true">01 · Basic chat</button>
+    <button class="tab" data-tab="routing" aria-pressed="false">02 · Routing</button>
+    <button class="tab" data-tab="limits" aria-pressed="false">03 · Rate limits</button>
+  </div>
+  <section id="basic" class="panel active">
+    <h3>Basic chat: one stable API endpoint</h3>
+    <p>The client sends a model alias, messages, and a LiteLLM virtual key. LiteLLM checks the key and forwards the request to the upstream model configured under that alias.</p>
+    <pre><code>client = OpenAI(
+    api_key=LITELLM_VIRTUAL_KEY,
+    base_url="http://localhost:4000/v1"
+)
+client.chat.completions.create(
+    model="local-llama",
+    messages=[{"role":"user","content":"Hello"}]
+)</code></pre>
+    <p><b>Key distinction:</b> the virtual key authenticates the application to LiteLLM. It is not an OpenAI provider API key.</p>
+  </section>
+  <section id="routing" class="panel">
+    <h3>Model routing: aliases hide provider details</h3>
+    <p>The app asks for <code>local-llama</code>. LiteLLM maps that alias to <code>ollama_chat/llama3.2</code>. If enabled, <code>cloud-gpt</code> can map to an OpenAI model. The client code stays OpenAI-compatible.</p>
+    <pre><code>model_list:
+  - model_name: local-llama
+    litellm_params:
+      model: ollama_chat/llama3.2
+      api_base: http://host.docker.internal:11434
+
+  # Optional cloud route:
+  # - model_name: cloud-gpt
+  #   litellm_params:
+  #     model: openai/gpt-4.1-mini
+  #     api_key: os.environ/OPENAI_API_KEY</code></pre>
+    <p>Aliases are the names applications request. The provider model and connection settings are configured on the proxy.</p>
+  </section>
+  <section id="limits" class="panel">
+    <h3>Rate limits: policy belongs at the gateway</h3>
+    <p>Create a dedicated virtual key or test team and configure a low requests-per-minute (RPM) limit. Then run <code>demos/03_rate_limits.py</code> with concurrent calls.</p>
+    <pre><code>export LITELLM_VIRTUAL_KEY="your-test-key"
+export REQUEST_COUNT=12
+export MAX_WORKERS=8
+python demos/03_rate_limits.py</code></pre>
+    <p>When the configured limit is reached, some requests may receive HTTP 429. Concurrency alone does not create a limit; the key or team must have a limit configured.</p>
+  </section>
+
+  <section>
+    <h2>3. Try the request-path simulator</h2>
+    <p>Choose an upstream and whether the app's virtual key is valid. This is a teaching simulation, not a live connection to your proxy.</p>
+    <div class="grid">
+      <div>
+        <label for="upstream">Configured upstream</label>
+        <select id="upstream">
+          <option value="ollama">Local Ollama</option>
+          <option value="openai">OpenAI cloud</option>
+        </select>
+      </div>
+      <div>
+        <label for="keyState">LiteLLM virtual key</label>
+        <select id="keyState">
+          <option value="valid">Valid and permitted</option>
+          <option value="invalid">Invalid / revoked</option>
+          <option value="blocked">Valid, but model not permitted</option>
+          <option value="limited">Valid, but RPM limit reached</option>
+        </select>
+      </div>
+      <div>
+        <label for="providerKey">Provider credential</label>
+        <select id="providerKey">
+          <option value="present">Available</option>
+          <option value="missing">Missing</option>
+        </select>
+      </div>
+    </div>
+    <p><button id="simulate">Simulate request</button></p>
+    <div class="callout" id="scenarioOutput" aria-live="polite">Select conditions, then simulate the request path.</div>
+  </section>
+
+  <section>
+    <h2>4. Troubleshooting decision helper</h2>
+    <label for="problem">Select the error you see</label>
+    <select id="problem">
+      <option value="missing">Missing OpenAI API key</option>
+      <option value="host">host.docker.internal cannot resolve</option>
+      <option value="loopback">Ollama listens only on 127.0.0.1</option>
+      <option value="reset">Connection reset / refused</option>
+      <option value="key">Virtual key rejected / model not allowed</option>
+      <option value="429">No HTTP 429 in rate-limit demo</option>
+      <option value="db">PostgreSQL / proxy startup failure</option>
+    </select>
+    <p><button id="diagnose">Show checks</button></p>
+    <div id="diagnosis" class="callout" aria-live="polite">Choose an error and show the suggested checks.</div>
+  </section>
+
+  <section>
+    <h2>5. Local-only vs cloud-enabled</h2>
+    <div class="grid">
+      <div class="card"><strong>Local-only</strong>
+        Ollama runs on your host. Pull a model, make its API reachable from Docker, and configure the Ollama model alias. No OpenAI provider key is needed.
+      </div>
+      <div class="card"><strong>Cloud-enabled</strong>
+        Add your own OpenAI provider key to the proxy environment, enable the cloud model entry, and ensure the virtual key is allowed to use that alias.
+      </div>
+    </div>
+    <p class="callout">Never confuse the two credentials: <b>client → LiteLLM</b> uses a LiteLLM virtual key; <b>LiteLLM → OpenAI</b> uses your OpenAI provider key. Ollama local calls do not require an OpenAI key.</p>
+  </section>
+
+  <section>
+    <h2>6. Commands worth remembering</h2>
+    <pre><code># Check the proxy container and logs
+docker compose ps
+docker compose logs --tail=200 litellm
+
+# Check Ollama on the host
+ollama list
+ss -lntp | grep 11434
+curl http://localhost:11434/api/tags
+
+# Linux manual Ollama launch, reachable from Docker
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+
+# Recreate proxy after Compose networking changes
+docker compose up -d --force-recreate litellm</code></pre>
+    <p class="muted">If tools such as <code>curl</code> or <code>getent</code> are missing inside a minimal container, that alone does not prove the network is broken. Use a temporary diagnostic container or Python's standard library where available.</p>
+  </section>
+</main>
+<footer>LiteLLM Learning Lab · Educational demo · Keep credentials private and restrict network exposure.</footer>
+<script>
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === btn.dataset.tab));
+}));
+document.getElementById("simulate").addEventListener("click", () => {
+  const upstream = document.getElementById("upstream").value;
+  const key = document.getElementById("keyState").value;
+  const provider = document.getElementById("providerKey").value;
+  let result;
+  if (key === "invalid") result = "STOP at LiteLLM: authentication fails. Check the virtual key, expiry, revocation, and Authorization header.";
+  else if (key === "blocked") result = "STOP at LiteLLM policy: the key is valid, but it is not allowed to call this model alias. Update model access or request an allowed alias.";
+  else if (key === "limited") result = "STOP at LiteLLM rate limiter: the key/team limit has been reached. Expect a 429 response; wait for the window to reset or adjust the test limit.";
+  else if (upstream === "openai" && provider === "missing") result = "The app passed LiteLLM authentication, but the upstream OpenAI call cannot authenticate. Add OPENAI_API_KEY to the proxy environment and restart it.";
+  else if (upstream === "ollama") result = "The request passes the simulated gateway checks and is routed to Ollama. Confirm Ollama is running and reachable from the LiteLLM container.";
+  else result = "The request passes the simulated gateway checks and is routed to OpenAI using the provider key held by LiteLLM.";
+  document.getElementById("scenarioOutput").textContent = result;
+});
+const advice = {
+ missing: "Are you calling the cloud-gpt alias? A LiteLLM virtual key is not an OpenAI provider key. For local-only, call local-llama and leave cloud-gpt disabled. For cloud, set OPENAI_API_KEY in .env and restart LiteLLM.",
+ host: "On Linux, host.docker.internal may not resolve by default. Add extra_hosts: ['host.docker.internal:host-gateway'] to the LiteLLM service, recreate the container, and test name resolution/connectivity from the container.",
+ loopback: "A listener on 127.0.0.1 is host-loopback-only. For manually launched Ollama, stop it and run OLLAMA_HOST=0.0.0.0:11434 ollama serve. Restrict access with a firewall; do not expose it to the internet.",
+ reset: "Check docker compose ps and LiteLLM logs, then test Ollama directly on the host. A reset may indicate container restart/OOM, proxy startup failure, or upstream/network trouble. Isolate each hop.",
+ key: "Check that the client uses a LiteLLM virtual key, the key is active, the model alias matches config.yaml exactly, and key/team policy permits that alias.",
+ "429": "Concurrency alone does not trigger a 429. Configure a low RPM/TPM limit on a dedicated test key or team, then send enough requests within the rate-limit window.",
+ db: "Check docker compose ps and logs for both db and litellm. Verify DATABASE_URL credentials match POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD; wait for the database health check."
+};
+document.getElementById("diagnose").addEventListener("click", () => {
+  document.getElementById("diagnosis").textContent = advice[document.getElementById("problem").value];
+});
+</script>
+</body>
+</html>
